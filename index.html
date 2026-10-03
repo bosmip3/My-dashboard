@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบรายงานข้อมูลสรุป (Executive Report Dashboard)</title>
+    
+    <!-- 1. ดึง Tailwind CSS สำหรับจัดสไตล์ -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 2. ดึง Chart.js สำหรับวาดกราฟ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- 3. ดึง Font Awesome สำหรับไอคอน -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 text-gray-800 font-sans p-6">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header Section -->
+        <header class="flex flex-col md:flex-row md:items-center md:justify-between bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800">📊 สรุปผลรายงานข้อมูล</h1>
+                <p class="text-slate-500 text-sm">อัปเดตข้อมูลล่าสุด: <span id="currentDate"></span></p>
+            </div>
+            <div class="mt-4 md:mt-0 flex gap-3">
+                <button onclick="fetchDataFromSheet()" class="inline-flex items-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm transition">
+                    <i class="fa-solid fa-rotate"></i> โหลดข้อมูลใหม่
+                </button>
+                <button onclick="openAddModal()" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium text-sm transition shadow-sm">
+                    <i class="fa-solid fa-plus"></i> เพิ่มข้อมูลรายงาน
+                </button>
+            </div>
+        </header>
+
+        <!-- KPI Cards Section -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500">ยอดขายรวม</p>
+                    <h3 id="totalSales" class="text-2xl font-bold text-slate-800 mt-1">฿0</h3>
+                    <span class="text-xs text-emerald-600 font-semibold"><i class="fa-solid fa-arrow-up"></i> คำนวณตามข้อมูลจริง</span>
+                </div>
+                <div class="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <i class="fa-solid fa-wallet text-xl"></i>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500">จำนวนรายการทั้งหมด</p>
+                    <h3 id="totalCount" class="text-2xl font-bold text-slate-800 mt-1">0 รายการ</h3>
+                    <span class="text-xs text-blue-600 font-semibold"><i class="fa-solid fa-list-check"></i> ข้อมูลในระบบ</span>
+                </div>
+                <div class="p-3 bg-blue-50 text-blue-600 rounded-lg">
+                    <i class="fa-solid fa-database text-xl"></i>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-slate-500">สถานะระบบ</p>
+                    <h3 id="syncStatus" class="text-lg font-bold text-amber-500 mt-1">กำลังโหลด...</h3>
+                    <span class="text-xs text-slate-500 font-medium">เชื่อมต่อ Google Sheets</span>
+                </div>
+                <div class="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+                    <i class="fa-solid fa-cloud text-xl"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4">ยอดขายแยกตามรายการ</h2>
+                <div class="relative h-64">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 mb-4">สัดส่วนตามหมวดหมู่</h2>
+                <div class="relative h-64 flex justify-center">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Table Section -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center">
+                <h2 class="text-lg font-bold text-slate-800">รายการทั้งหมดใน Google Sheets</h2>
+                <span id="tableCountText" class="text-xs text-slate-400">กำลังโหลดข้อมูล...</span>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
+                        <tr>
+                            <th class="p-4">รายการ</th>
+                            <th class="p-4">หมวดหมู่</th>
+                            <th class="p-4">สถานะ</th>
+                            <th class="p-4 text-right">มูลค่า</th>
+                            <th class="p-4 text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-100">
+                        <tr>
+                            <td colspan="5" class="p-8 text-center text-slate-400">กำลังดึงข้อมูลจาก Google Sheets...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal กรอก / แก้ไขข้อมูล -->
+    <div id="dataModal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 relative">
+            <div class="flex justify-between items-center pb-4 border-b border-slate-100">
+                <h3 id="modalTitle" class="text-lg font-bold text-slate-800">➕ เพิ่มข้อมูลรายงานใหม่</h3>
+                <button onclick="toggleModal(false)" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+            </div>
+            
+            <form id="reportForm" onsubmit="handleFormSubmit(event)" class="mt-4 space-y-4">
+                <!-- เก็บ Row Index ของรายการที่จะแก้ไข (-1 = ข้อมูลใหม่) -->
+                <input type="hidden" id="editIndex" value="-1">
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">ชื่อรายการ / โปรเจกต์</label>
+                    <input type="text" id="titleInput" required placeholder="เช่น โปรเจกต์ D - ออกแบบระบบ" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">หมวดหมู่</label>
+                    <select id="categoryInput" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="Design">แก้ไฟ</option>
+                        <option value="Development">ปรับปรุง</option>
+                        <option value="Maintenance">งาน กส</option>
+                        <option value="Marketing">งานมิเตอร์</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">จำนวนเงิน (บาท)</label>
+                    <input type="number" id="amountInput" required placeholder="เช่น 50000" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">สถานะ</label>
+                    <select id="statusInput" class="w-full border border-slate-300 rounded-lg p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                        <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                    </select>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                    <button type="button" onclick="toggleModal(false)" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition">ยกเลิก</button>
+                    <button type="submit" id="submitBtn" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition">บันทึกข้อมูล</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JavaScript ควบคุมการรับส่งข้อมูล -->
+    <script>
+        // 📍 อัปเดต URL เป็น Web App URL สรุปแล้ว
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw9TgpEh53tGaJ3213TumvocMaJVWnDjg0_K8rNYDm9eE8cT2zHltfHSSMg99aMaqIZ/exec';
+
+        document.getElementById('currentDate').innerText = new Date().toLocaleDateString('th-TH', {
+            year: 'numeric', month: 'long', day: 'numeric'
+        });
+
+        let reports = [];
+        let barChart, pieChart;
+
+        window.onload = function() {
+            initCharts();
+            fetchDataFromSheet();
+        };
+
+        function initCharts() {
+            const ctxBar = document.getElementById('barChart').getContext('2d');
+            barChart = new Chart(ctxBar, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'ยอดเงิน (บาท)',
+                        data: [],
+                        backgroundColor: '#4f46e5',
+                        borderRadius: 6
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            const ctxPie = document.getElementById('pieChart').getContext('2d');
+            pieChart = new Chart(ctxPie, {
+                type: 'doughnut',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        backgroundColor: ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        // ดึงข้อมูลแบบ JSONP เพื่อแก้ไขปัญหา CORS (เชื่อมต่อล้มเหลว)
+        function fetchDataFromSheet() {
+            document.getElementById('syncStatus').innerText = 'กำลังโหลด...';
+            document.getElementById('syncStatus').className = 'text-lg font-bold text-amber-500 mt-1';
+
+            const callbackName = 'handleSheetData_' + Math.floor(Math.random() * 1000000);
+
+            window[callbackName] = function(data) {
+                if (data.result === 'success') {
+                    reports = data.data;
+                    renderDashboard();
+                    document.getElementById('syncStatus').innerText = 'เชื่อมต่อแล้ว';
+                    document.getElementById('syncStatus').className = 'text-lg font-bold text-emerald-600 mt-1';
+                } else {
+                    document.getElementById('syncStatus').innerText = 'เชื่อมต่อล้มเหลว';
+                    document.getElementById('syncStatus').className = 'text-lg font-bold text-rose-600 mt-1';
+                }
+                if (document.body.contains(script)) {
+                    document.body.removeChild(script);
+                }
+                delete window[callbackName];
+            };
+
+            const script = document.createElement('script');
+            script.src = `${GOOGLE_SCRIPT_URL}?action=read&callback=${callbackName}`;
+            script.onerror = function() {
+                document.getElementById('syncStatus').innerText = 'เชื่อมต่อล้มเหลว';
+                document.getElementById('syncStatus').className = 'text-lg font-bold text-rose-600 mt-1';
+                if (document.body.contains(script)) {
+                    document.body.removeChild(script);
+                }
+                delete window[callbackName];
+            };
+
+            document.body.appendChild(script);
+        }
+
+        function renderDashboard() {
+            const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = '';
+            
+            let totalSales = 0;
+            const labels = [];
+            const chartData = [];
+            const categoryTotals = {};
+
+            if (reports.length === 0) {
+                tableBody.innerHTML = `<tr><td colspan="5" class="p-8 text-center text-slate-400">ยังไม่มีข้อมูลใน Google Sheets</td></tr>`;
+            } else {
+                reports.forEach((item, index) => {
+                    const numAmount = Number(item.amount) || 0;
+                    totalSales += numAmount;
+                    labels.push(item.title);
+                    chartData.push(numAmount);
+
+                    categoryTotals[item.category] = (categoryTotals[item.category] || 0) + numAmount;
+
+                    const statusBadge = item.status === 'เสร็จสิ้น' 
+                        ? `<span class="px-2.5 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-full">เสร็จสิ้น</span>`
+                        : `<span class="px-2.5 py-1 text-xs font-semibold bg-amber-100 text-amber-700 rounded-full">กำลังดำเนินการ</span>`;
+
+                    const row = `
+                        <tr class="hover:bg-slate-50 transition">
+                            <td class="p-4 font-medium">${item.title}</td>
+                            <td class="p-4 text-slate-500">${item.category}</td>
+                            <td class="p-4">${statusBadge}</td>
+                            <td class="p-4 text-right font-medium">฿${numAmount.toLocaleString()}</td>
+                            <td class="p-4 text-center">
+                                <div class="flex justify-center gap-2">
+                                    <button onclick="openEditModal(${index})" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition" title="แก้ไข">
+                                        <i class="fa-solid fa-pen-to-square"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    tableBody.insertAdjacentHTML('beforeend', row);
+                });
+            }
+
+            document.getElementById('totalSales').innerText = '฿' + totalSales.toLocaleString();
+            document.getElementById('totalCount').innerText = reports.length + ' รายการ';
+            document.getElementById('tableCountText').innerText = `แสดง ${reports.length} รายการ`;
+
+            barChart.data.labels = labels;
+            barChart.data.datasets[0].data = chartData;
+            barChart.update();
+
+            pieChart.data.labels = Object.keys(categoryTotals);
+            pieChart.data.datasets[0].data = Object.values(categoryTotals);
+            pieChart.update();
+        }
+
+        function openAddModal() {
+            document.getElementById('modalTitle').innerText = '➕ เพิ่มข้อมูลรายงานใหม่';
+            document.getElementById('editIndex').value = '-1';
+            document.getElementById('reportForm').reset();
+            toggleModal(true);
+        }
+
+        function openEditModal(index) {
+            const item = reports[index];
+            document.getElementById('modalTitle').innerText = '✏️ แก้ไขข้อมูลรายงาน';
+            document.getElementById('editIndex').value = index;
+            document.getElementById('titleInput').value = item.title;
+            document.getElementById('categoryInput').value = item.category;
+            document.getElementById('amountInput').value = item.amount;
+            document.getElementById('statusInput').value = item.status;
+            toggleModal(true);
+        }
+
+        async function handleFormSubmit(event) {
+            event.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.innerText = 'กำลังบันทึก...';
+            submitBtn.disabled = true;
+
+            const index = parseInt(document.getElementById('editIndex').value);
+            const title = document.getElementById('titleInput').value;
+            const category = document.getElementById('categoryInput').value;
+            const amount = Number(document.getElementById('amountInput').value);
+            const status = document.getElementById('statusInput').value;
+
+            const payload = {
+                action: index === -1 ? 'create' : 'update',
+                rowIndex: index === -1 ? null : reports[index].rowIndex,
+                title: title,
+                category: category,
+                amount: amount,
+                status: status
+            };
+
+            try {
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                setTimeout(() => {
+                    fetchDataFromSheet();
+                    toggleModal(false);
+                    submitBtn.innerText = 'บันทึกข้อมูล';
+                    submitBtn.disabled = false;
+                }, 1200);
+
+            } catch (error) {
+                console.error('Error saving data:', error);
+                alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
+                submitBtn.innerText = 'บันทึกข้อมูล';
+                submitBtn.disabled = false;
+            }
+        }
+
+        function toggleModal(show) {
+            const modal = document.getElementById('dataModal');
+            if (show) {
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+    </script>
+</body>
+</html>
